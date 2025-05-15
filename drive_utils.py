@@ -1,17 +1,19 @@
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+import streamlit as st
 import io
+import json
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
-SERVICE_ACCOUNT_FILE = 'service_account.json'
 
-# Authenticate using service account credentials
-credentials = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
+# Load service account from Streamlit secrets
+creds_dict = json.loads(st.secrets["google"]["service_account"])
+credentials = service_account.Credentials.from_service_account_info(
+    creds_dict, scopes=SCOPES
 )
 
-# Build the Drive API client using default HTTP transport (safe and compatible)
+# Build the Drive API client
 drive_service = build('drive', 'v3', credentials=credentials)
 
 def list_files_in_folder(folder_id, mime_types=None):

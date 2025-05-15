@@ -12,7 +12,6 @@ from docx.shared import Inches
 from drive_utils import list_files_in_folder, download_file
 from tempfile import NamedTemporaryFile
 from pathlib import Path
-import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Letterhead Merger", layout="wide")
 st.title("📄 Letterhead Document Merger (Drive-Based)")
@@ -21,20 +20,19 @@ st.title("📄 Letterhead Document Merger (Drive-Based)")
 LETTERHEAD_FOLDER_ID = "1cptQfvNP9UxHK_-lfkZc6lEqW3GfAg4e"
 BODY_FOLDER_ID = "1d87BF8jSmyTibx3-qYgP_gG4Z9mLsFTr"
 
-# === Secure PDF Viewer for Preview ===
-def show_pdf(pdf_file):
-    base64_pdf = base64.b64encode(pdf_file.read()).decode("utf-8")
-    pdf_display = f"""
-        <iframe
-            src="data:application/pdf;base64,{base64_pdf}"
-            width="100%"
-            height="600"
-            type="application/pdf">
-        </iframe>
-    """
-    components.html(pdf_display, height=620, scrolling=True)
-
 # === Helper Functions ===
+
+def show_pdf_as_image(pdf_file):
+    with NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
+        temp_pdf.write(pdf_file.read())
+        temp_pdf.flush()
+        doc = fitz.open(temp_pdf.name)
+        page = doc.load_page(0)
+        pix = page.get_pixmap(dpi=150)
+        img_path = "uploaded_preview.png"
+        pix.save(img_path)
+        return img_path
+
 def docx_to_text_from_bytes(byte_stream):
     doc = Document(byte_stream)
     return "\n".join(p.text for p in doc.paragraphs)
@@ -74,15 +72,16 @@ letterhead_bytes = download_file(letterhead_file_id)
 
 # === Select Body File from Drive ===
 body_files = list_files_in_folder(BODY_FOLDER_ID, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
-selected_body = st.selectbox("📁 Select Surrender BL File from Google Drive", [f['name'] for f in body_files])
+selected_body = st.selectbox("📁 Select BL Surrender File from Google Drive", [f['name'] for f in body_files])
 body_file_id = next(f['id'] for f in body_files if f['name'] == selected_body)
 body_bytes = download_file(body_file_id)
 
-# === Optional Reference PDF Upload + Preview ===
+# === Optional Reference PDF Upload + Image Preview ===
 st.subheader("📎 Upload Reference PDF (optional)")
 ref_pdf = st.file_uploader("Upload PDF to preview", type=["pdf"])
 if ref_pdf:
-    show_pdf(ref_pdf)
+    preview_img = show_pdf_as_image(ref_pdf)
+    st.image(preview_img, caption="First Page Preview", use_column_width=True)
 
 # === Process Letterhead File ===
 signature_crop_path = None

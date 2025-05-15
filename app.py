@@ -1,6 +1,5 @@
 import streamlit as st
 import fitz  # PyMuPDF
-from pdf2image import convert_from_path
 from docx import Document
 import base64
 import io
@@ -14,24 +13,21 @@ from drive_utils import list_files_in_folder, download_file
 from tempfile import NamedTemporaryFile
 from pathlib import Path
 
-# === Google Drive Folder IDs ===
-LETTERHEAD_FOLDER_ID = "1cptQfvNP9UxHK_-lfkZc6lEqW3GfAg4e"
-BODY_FOLDER_ID = "1d87BF8jSmyTibx3-qYgP_gG4Z9mLsFTr"
-POPPLER_PATH = "D:/poppler-24.08.0/Library/bin"
-
 st.set_page_config(page_title="Letterhead Merger", layout="wide")
 st.title("📄 Letterhead Document Merger (Drive-Based)")
 
+# === Google Drive Folder IDs ===
+LETTERHEAD_FOLDER_ID = "1cptQfvNP9UxHK_-lfkZc6lEqW3GfAg4e"
+BODY_FOLDER_ID = "1d87BF8jSmyTibx3-qYgP_gG4Z9mLsFTr"
+
 # === Select Letterhead from Drive ===
-letterhead_files = list_files_in_folder(LETTERHEAD_FOLDER_ID, [
-    "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
+letterhead_files = list_files_in_folder(LETTERHEAD_FOLDER_ID, ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
 selected_letterhead = st.selectbox("📁 Select LETTERHEAD File from Google Drive", [f['name'] for f in letterhead_files])
 letterhead_file_id = next(f['id'] for f in letterhead_files if f['name'] == selected_letterhead)
 letterhead_bytes = download_file(letterhead_file_id)
 
 # === Select Body File from Drive ===
-body_files = list_files_in_folder(BODY_FOLDER_ID, [
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
+body_files = list_files_in_folder(BODY_FOLDER_ID, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
 selected_body = st.selectbox("📁 Select BODY File from Google Drive", [f['name'] for f in body_files])
 body_file_id = next(f['id'] for f in body_files if f['name'] == selected_body)
 body_bytes = download_file(body_file_id)
@@ -98,15 +94,18 @@ else:
         temp_pdf.flush()
         temp_pdf_path = temp_pdf.name
 
-images = convert_from_path(temp_pdf_path, dpi=150, poppler_path=POPPLER_PATH)
-if images:
-    images[0].save(pdf_img_path)
-    image = Image.open(pdf_img_path)
-    st.subheader("✂️ Crop Signature From Letterhead Preview")
-    cropped_img = st_cropper(image, box_color='#0000FF', aspect_ratio=None)
-    cropped_img_path = "cropped_signature.png"
-    cropped_img.save(cropped_img_path)
-    st.image(cropped_img_path, caption="Selected Signature Area", width=300)
+# ✅ Use PyMuPDF instead of pdf2image
+doc = fitz.open(temp_pdf_path)
+page = doc.load_page(0)
+pix = page.get_pixmap(dpi=150)
+pix.save(pdf_img_path)
+image = Image.open(pdf_img_path)
+
+st.subheader("✂️ Crop Signature From Letterhead Preview")
+cropped_img = st_cropper(image, box_color='#0000FF', aspect_ratio=None)
+cropped_img_path = "cropped_signature.png"
+cropped_img.save(cropped_img_path)
+st.image(cropped_img_path, caption="Selected Signature Area", width=300)
 
 # === Body Text Edit ===
 st.subheader("📝 Edit Body Text")
@@ -118,8 +117,6 @@ if st.button("📥 Generate & Download Final DOCX"):
     header_img = "temp_header.png"
     footer_img = "temp_footer.png"
 
-    doc = fitz.open(temp_pdf_path)
-    page = doc.load_page(0)
     page.get_pixmap(clip=fitz.Rect(0, 0, page.rect.width, 100)).save(header_img)
     page.get_pixmap(clip=fitz.Rect(0, page.rect.height - 100, page.rect.width, page.rect.height)).save(footer_img)
 

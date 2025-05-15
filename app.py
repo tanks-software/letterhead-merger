@@ -12,6 +12,7 @@ from docx.shared import Inches
 from drive_utils import list_files_in_folder, download_file
 from tempfile import NamedTemporaryFile
 from pathlib import Path
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Letterhead Merger", layout="wide")
 st.title("📄 Letterhead Document Merger (Drive-Based)")
@@ -20,24 +21,18 @@ st.title("📄 Letterhead Document Merger (Drive-Based)")
 LETTERHEAD_FOLDER_ID = "1cptQfvNP9UxHK_-lfkZc6lEqW3GfAg4e"
 BODY_FOLDER_ID = "1d87BF8jSmyTibx3-qYgP_gG4Z9mLsFTr"
 
-# === Select Letterhead from Drive ===
-letterhead_files = list_files_in_folder(LETTERHEAD_FOLDER_ID, ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
-selected_letterhead = st.selectbox("📁 Select LETTERHEAD File from Google Drive", [f['name'] for f in letterhead_files])
-letterhead_file_id = next(f['id'] for f in letterhead_files if f['name'] == selected_letterhead)
-letterhead_bytes = download_file(letterhead_file_id)
-
-# === Select Body File from Drive ===
-body_files = list_files_in_folder(BODY_FOLDER_ID, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
-selected_body = st.selectbox("📁 Select BODY File from Google Drive", [f['name'] for f in body_files])
-body_file_id = next(f['id'] for f in body_files if f['name'] == selected_body)
-body_bytes = download_file(body_file_id)
-
-# === Optional Reference PDF Upload ===
-st.subheader("📎 Upload Reference PDF (optional)")
-ref_pdf = st.file_uploader("Upload PDF to preview", type=["pdf"])
-if ref_pdf:
-    base64_pdf = base64.b64encode(ref_pdf.read()).decode("utf-8")
-    st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600"></iframe>', unsafe_allow_html=True)
+# === Secure PDF Viewer for Preview ===
+def show_pdf(pdf_file):
+    base64_pdf = base64.b64encode(pdf_file.read()).decode("utf-8")
+    pdf_display = f"""
+        <iframe
+            src="data:application/pdf;base64,{base64_pdf}"
+            width="100%"
+            height="600"
+            type="application/pdf">
+        </iframe>
+    """
+    components.html(pdf_display, height=620, scrolling=True)
 
 # === Helper Functions ===
 def docx_to_text_from_bytes(byte_stream):
@@ -71,6 +66,24 @@ def build_clean_letterhead_docx(header_img, footer_img, body_text, letterhead_si
     buffer.seek(0)
     return buffer
 
+# === Select Letterhead from Drive ===
+letterhead_files = list_files_in_folder(LETTERHEAD_FOLDER_ID, ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
+selected_letterhead = st.selectbox("📁 Select LETTERHEAD File from Google Drive", [f['name'] for f in letterhead_files])
+letterhead_file_id = next(f['id'] for f in letterhead_files if f['name'] == selected_letterhead)
+letterhead_bytes = download_file(letterhead_file_id)
+
+# === Select Body File from Drive ===
+body_files = list_files_in_folder(BODY_FOLDER_ID, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
+selected_body = st.selectbox("📁 Select Surrender BL File from Google Drive", [f['name'] for f in body_files])
+body_file_id = next(f['id'] for f in body_files if f['name'] == selected_body)
+body_bytes = download_file(body_file_id)
+
+# === Optional Reference PDF Upload + Preview ===
+st.subheader("📎 Upload Reference PDF (optional)")
+ref_pdf = st.file_uploader("Upload PDF to preview", type=["pdf"])
+if ref_pdf:
+    show_pdf(ref_pdf)
+
 # === Process Letterhead File ===
 signature_crop_path = None
 pdf_img_path = "letterhead_preview.png"
@@ -94,7 +107,7 @@ else:
         temp_pdf.flush()
         temp_pdf_path = temp_pdf.name
 
-# ✅ Use PyMuPDF instead of pdf2image
+# === Generate First Page Preview for Cropping ===
 doc = fitz.open(temp_pdf_path)
 page = doc.load_page(0)
 pix = page.get_pixmap(dpi=150)

@@ -1,0 +1,10 @@
+streamlit
+google-api-python-client
+google-auth
+google-auth-httplib2
+google-auth-oauthlib
+python-docx
+PyMuPDF
+pdf2image
+Pillow
+streamlit-cropper

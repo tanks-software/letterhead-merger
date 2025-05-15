@@ -1,21 +1,24 @@
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
-from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import streamlit as st
-import io
 import json
+import io
+import requests
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from google.auth.transport.requests import AuthorizedSession
 
+# === SCOPES and Credential Loading ===
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
-# Load service account from Streamlit secrets
 creds_dict = json.loads(st.secrets["google"]["service_account"])
 credentials = service_account.Credentials.from_service_account_info(
     creds_dict, scopes=SCOPES
 )
 
-# Build the Drive API client
+# Build Google Drive API client
 drive_service = build('drive', 'v3', credentials=credentials)
 
+# === List Files in a Google Drive Folder ===
 def list_files_in_folder(folder_id, mime_types=None):
     query = f"'{folder_id}' in parents and trashed = false"
     if mime_types:
@@ -24,16 +27,18 @@ def list_files_in_folder(folder_id, mime_types=None):
     results = drive_service.files().list(q=query, fields="files(id, name)").execute()
     return results.get('files', [])
 
+# === Download File from Google Drive (SSL-safe) ===
 def download_file(file_id):
-    request = drive_service.files().get_media(fileId=file_id)
-    fh = io.BytesIO()
-    downloader = MediaIoBaseDownload(fh, request)
-    done = False
-    while not done:
-        status, done = downloader.next_chunk()
-    fh.seek(0)
-    return fh
+    authed_session = AuthorizedSession(credentials)
+    download_url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
 
+    response = authed_session.get(download_url)
+    if response.status_code != 200:
+        raise Exception(f"Failed to download file. HTTP {response.status_code}: {response.text}")
+
+    return io.BytesIO(response.content)
+
+# === Upload File to Google Drive ===
 def upload_file(buffer, filename, folder_id):
     file_metadata = {
         'name': filename,
